@@ -1,13 +1,14 @@
+const dotenv = require('dotenv');
+const path = require('path');
 const { faker } = require('@faker-js/faker');
 const mongoose = require('mongoose');
 const Product = require('../models/productModel');
 const Category = require('./../models/categoryModel');
-const dotenv = require('dotenv');
 
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 const DB = process.env.DATABASE.replace(
   '<password>',
-  process.env.DATABASE_PASSWORD
+  process.env.DATABASE_PASSWORD,
 );
 
 console.log(DB);
@@ -177,7 +178,7 @@ async function seedDB() {
   await seedProducts(
     largeHandbags_titles,
     largeHandbags_imgs,
-    'Large Handbags'
+    'Large Handbags',
   );
 
   await closeDB();
