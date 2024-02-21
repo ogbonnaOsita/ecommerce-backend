@@ -63,9 +63,6 @@ exports.signup = catchAsync(async (req, res, next) => {
     res.status(200).json({
       status: 'success',
       message: 'Account verification link has been sent to your email',
-      data: {
-        user: newUser,
-      },
     });
   } catch (err) {
     newUser.emailActivationToken = undefined;
