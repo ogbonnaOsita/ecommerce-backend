@@ -1,4 +1,5 @@
 const Order = require('../models/orderModel');
+const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 const factory = require('./handlerFactory');
 
@@ -9,6 +10,29 @@ exports.createOrder = catchAsync(async (req, res, next) => {
     status: 'success',
     data: {
       order,
+    },
+  });
+});
+
+exports.getAllUserOrders = catchAsync(async (req, res, next) => {
+  const orders = await Order.find({ user: req.user.id });
+  if (!orders) return next(new AppError('No order found', 404));
+  res.status(200).json({
+    status: 'success',
+    count: orders.length,
+    data: {
+      data: orders,
+    },
+  });
+});
+
+exports.getUserOrder = catchAsync(async (req, res, next) => {
+  const order = await Order.findOne({ user: req.user.id, _id: req.params.id });
+  if (!order) return next(new AppError('No order found', 404));
+  res.status(200).json({
+    status: 'success',
+    data: {
+      data: order,
     },
   });
 });

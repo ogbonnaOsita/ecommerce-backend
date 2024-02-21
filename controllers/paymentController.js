@@ -1,7 +1,9 @@
-const https = require('https');
 const User = require('../models/userModel');
+const Payment = require('../models/paymentModel');
 const catchAsync = require('../utils/catchAsync');
 const AppError = require('../utils/appError');
+const { paystackConnect } = require('../utils/paymentHandlers');
+const factory = require('./handlerFactory');
 
 exports.acceptPayment = catchAsync(async (req, res, next) => {
   // Ensure user is authenticated and retrieve user details
@@ -16,261 +18,108 @@ exports.acceptPayment = catchAsync(async (req, res, next) => {
     return next(new AppError('Invalid amount', 400));
   }
 
-  // Params
-  const params = JSON.stringify({
-    email: user.email,
-    amount: amount * 100, // Convert amount to kobo (if using Naira)
-  });
-
-  // Options
-  const options = {
-    hostname: 'api.paystack.co',
-    port: 443,
-    path: '/transaction/initialize',
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-      'Content-Type': 'application/json',
-    },
-  };
-
-  // Client request
-  const clientReq = https.request(options, (apiRes) => {
-    let data = '';
-    apiRes.on('data', (chunk) => {
-      data += chunk;
-    });
-    apiRes.on('end', () => {
-      try {
-        const responseData = JSON.parse(data);
-        if (apiRes.statusCode === 200) {
-          res.status(200).json(responseData);
-        } else {
-          // Handle Paystack API error response
-          next(
-            new AppError(
-              responseData.message || 'Paystack API error',
-              apiRes.statusCode,
-            ),
-          );
-        }
-      } catch (error) {
-        // Handle JSON parsing error
-        next(new AppError('Error parsing JSON response', 500));
-      }
-    });
-  });
-
-  clientReq.on('error', (error) => {
-    // Handle error from the HTTPS request
-    next(new AppError(error.message, 500));
-  });
-
-  clientReq.write(params);
-  clientReq.end();
+  await paystackConnect
+    .post('/transaction/initialize', {
+      email: user.email,
+      amount: amount * 100,
+    })
+    .then((resData) => {
+      res.status(201).json({
+        status: 'success',
+        data: {
+          data: resData.data,
+        },
+      });
+    })
+    .catch((error) => next(new AppError(error.message, 500)));
 });
 
 exports.verifyPayment = catchAsync(async (req, res, next) => {
-  const options = {
-    hostname: 'api.paystack.co',
-    port: 443,
-    path: `/transaction/verify/${req.params.reference}`,
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-    },
-  };
+  await paystackConnect
+    .get(`/transaction/verify/${req.params.reference}`)
+    .then(async (responseData) => {
+      const paymentData = {};
+      paymentData.user = req.user.id;
+      paymentData.paymentID = responseData.data.data.id;
+      paymentData.customerID = responseData.data.data.customer.id;
+      paymentData.amount = responseData.data.data.amount / 100;
+      paymentData.reference = responseData.data.data.reference;
+      paymentData.status = responseData.data.data.status;
+      paymentData.createdAt = responseData.data.data.created_at;
 
-  const apiReq = https.request(options, (apiRes) => {
-    let data = '';
+      const payment = await Payment.findOne({
+        paymentID: responseData.data.data.id,
+      });
 
-    apiRes.on('data', (chunk) => {
-      data += chunk;
-    });
-
-    apiRes.on('end', () => {
-      try {
-        const responseData = JSON.parse(data);
-        if (apiRes.statusCode === 200) {
-          res.status(200).json(responseData);
-        } else {
-          // Handle Paystack API error response
-          next(
-            new AppError(
-              responseData.message || 'Paystack API error',
-              apiRes.statusCode,
-            ),
-          );
-        }
-      } catch (error) {
-        // Handle JSON parsing error
-        next(new AppError('Error parsing JSON response', 500));
+      if (!payment) {
+        await Payment.create(paymentData);
+      } else if (payment.status !== responseData.data.status) {
+        payment.status = responseData.data.status;
+        payment.save();
       }
-    });
-  });
-
-  apiReq.on('error', (error) => {
-    // Handle error from the HTTPS request
-    next(new AppError(error.message, 500));
-  });
-
-  // End the HTTPS request
-  apiReq.end();
+      res.status(200).json({
+        status: 'success',
+        data: {
+          data: responseData.data,
+        },
+      });
+    })
+    .catch((err) => next(new AppError(err.message, 500)));
 });
 
-exports.chargeCard = catchAsync(async (req, res, next) => {
-  const params = JSON.stringify({
-    email: req.body.email,
-    amount: req.body.amount * 100, // Assuming the amount is in kobo (100 kobo = 1 Naira)
-    authorization_code: req.body.authorization_code,
-  });
-
-  const options = {
-    hostname: 'api.paystack.co',
-    port: 443,
-    path: '/transaction/charge_authorization',
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(params), // Add Content-Length header
-    },
-  };
-
-  const request = https.request(options, (apiRes) => {
-    let data = '';
-
-    apiRes.on('data', (chunk) => {
-      data += chunk;
-    });
-
-    apiRes.on('end', () => {
-      try {
-        const responseData = JSON.parse(data);
-        if (apiRes.statusCode === 200) {
-          res.status(200).json({
-            status: 'success',
-            data: responseData,
-          });
-        } else {
-          // Handle Paystack API error response
-          next(
-            new AppError(
-              responseData.message || 'Paystack API error',
-              apiRes.statusCode,
-            ),
-          );
-        }
-      } catch (error) {
-        next(new AppError('Error parsing Paystack API response', 500));
-      }
-    });
-  });
-
-  request.on('error', (error) => {
-    // Handle error from the HTTPS request
-    next(new AppError(error.message, 500));
-  });
-
-  request.write(params);
-  request.end();
+exports.getAllTransactionsPaystack = catchAsync(async (req, res, next) => {
+  await paystackConnect
+    .get('/transaction')
+    .then((responseData) => {
+      res.status(200).json({
+        status: 'success',
+        count: responseData.data.data.length,
+        data: {
+          data: responseData.data,
+        },
+      });
+    })
+    .catch((err) => next(new AppError(err.message, 500)));
 });
 
-exports.getAllTransactions = catchAsync(async (req, res, next) => {
-  const options = {
-    hostname: 'api.paystack.co',
-    port: 443,
-    path: '/transaction',
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
-    },
-  };
-
-  const apiReq = https.request(options, (apiRes) => {
-    let data = '';
-
-    apiRes.on('data', (chunk) => {
-      data += chunk;
-    });
-
-    apiRes.on('end', () => {
-      try {
-        const responseData = JSON.parse(data);
-        if (apiRes.statusCode === 200) {
-          res.status(200).json({
-            status: 'success',
-            data: responseData,
-          });
-        } else {
-          // Handle Paystack API error response
-          res.status(apiRes.statusCode).json({
-            status: 'error',
-            error: responseData.error || 'Paystack API error',
-          });
-        }
-      } catch (error) {
-        next(new AppError('Error parsing Paystack API response', 500));
-      }
-    });
-  });
-
-  apiReq.on('error', (error) => {
-    // Handle error from the HTTPS request
-    res.status(500).json({
-      status: 'error',
-      error: error.message || 'Internal server error',
-    });
-  });
-
-  // End the HTTPS request
-  apiReq.end();
+exports.getTransactionPaystack = catchAsync(async (req, res, next) => {
+  await paystackConnect
+    .get(`/transaction/${req.params.id}`)
+    .then((responseData) => {
+      res.status(200).json({
+        status: 'success',
+        data: responseData.data,
+      });
+    })
+    .catch((err) => next(new AppError(err.message, 500)));
 });
 
-exports.getTransaction = catchAsync(async (req, res, next) => {
-  const options = {
-    hostname: 'api.paystack.co',
-    port: 443,
-    path: `/transaction/${req.params.id}`,
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+exports.getAllUserTransactions = catchAsync(async (req, res, next) => {
+  const payments = await Payment.find({ user: req.user.id });
+  if (!payments) return next(new AppError('No transaction found', 404));
+  res.status(200).json({
+    status: 'success',
+    count: payments.length,
+    data: {
+      data: payments,
     },
-  };
-
-  const apiReq = https.request(options, (apiRes) => {
-    let data = '';
-
-    apiRes.on('data', (chunk) => {
-      data += chunk;
-    });
-
-    apiRes.on('end', () => {
-      try {
-        const responseData = JSON.parse(data);
-        if (apiRes.statusCode === 200) {
-          res.status(200).json({
-            status: 'success',
-            data: responseData,
-          });
-        } else {
-          // Handle Paystack API error response
-          next(
-            new AppError(
-              responseData.message || 'Paystack API error',
-              apiRes.statusCode,
-            ),
-          );
-        }
-      } catch (error) {
-        next(new AppError('Error parsing Paystack API response', 500));
-      }
-    });
   });
-
-  apiReq.on('error', (error) => {
-    next(new AppError(error.message, 500));
-  });
-
-  apiReq.end();
 });
+
+exports.getUserTransaction = catchAsync(async (req, res, next) => {
+  const payment = await Payment.findOne({
+    user: req.user.id,
+    paymentID: req.params.paymentID,
+  });
+
+  if (!payment) return next(new AppError('No transaction found', 404));
+  res.status(200).json({
+    status: 'success',
+    data: {
+      data: payment,
+    },
+  });
+});
+
+exports.getAllTransactions = factory.getAll(Payment);
+exports.getTransaction = factory.getOne(Payment);

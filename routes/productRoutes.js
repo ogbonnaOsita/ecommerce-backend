@@ -33,6 +33,4 @@ router
     productController.deleteProduct,
   );
 
-// router.route('/products-stat').get(productController.getProductStats);
-
 module.exports = router;
