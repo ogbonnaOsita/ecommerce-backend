@@ -9,7 +9,7 @@ const reviewSchema = new mongoose.Schema(
     },
     rating: {
       type: Number,
-      // required: [true, 'A review must have a rating'],
+      required: [true, 'A review must have a rating'],
       min: 1,
       max: 5,
     },
@@ -38,7 +38,6 @@ reviewSchema.index({ product: 1, user: 1 }, { unique: true });
 
 reviewSchema.pre(/^find/, function (next) {
   this.select('-__v');
-  // this.populate({ path: 'product', select: 'title' });
   this.populate({
     path: 'user',
     select: 'firstName lastName photo',

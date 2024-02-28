@@ -1,4 +1,5 @@
 const Order = require('../models/orderModel');
+const APIFeatures = require('../utils/apiFeatures');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 const factory = require('./handlerFactory');
@@ -15,11 +16,20 @@ exports.createOrder = catchAsync(async (req, res, next) => {
 });
 
 exports.getAllUserOrders = catchAsync(async (req, res, next) => {
-  const orders = await Order.find({ user: req.user.id });
+  const filter = { user: req.user.id };
+
+  const totalCount = await Order.countDocuments(filter);
+
+  const features = new APIFeatures(Order.find(filter), req.query)
+    .filter()
+    .sort()
+    .limitFields()
+    .pagination();
+  const orders = await features.query;
   if (!orders) return next(new AppError('No order found', 404));
   res.status(200).json({
     status: 'success',
-    count: orders.length,
+    count: totalCount,
     data: {
       data: orders,
     },

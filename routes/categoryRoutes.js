@@ -9,6 +9,8 @@ router
   .post(
     authController.protect,
     authController.restrictTo('admin', 'editor'),
+    categoryController.uploadCategoryThumbnail,
+    categoryController.resizeCategoryThumbnail,
     categoryController.createCategory,
   )
   .get(categoryController.getAllCategories);
@@ -19,6 +21,8 @@ router
   .patch(
     authController.protect,
     authController.restrictTo('admin', 'editor'),
+    categoryController.uploadCategoryThumbnail,
+    categoryController.resizeCategoryThumbnail,
     categoryController.updateCategory,
   )
   .delete(

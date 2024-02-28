@@ -33,7 +33,7 @@ async function seedDB() {
     try {
       const products = await Product.find().select('_id');
       const users = await User.find({ role: 'user' }).select('_id');
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 100; i++) {
         const review = new Review({
           review: faker.lorem.sentence(),
           rating: faker.number.int({ min: 1, max: 5 }),

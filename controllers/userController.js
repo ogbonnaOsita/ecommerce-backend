@@ -4,16 +4,7 @@ const User = require('../models/userModel');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
 const factory = require('./handlerFactory');
-
-// const multerStorage = multer.diskStorage({
-//   destination: (req, file, cb) => {
-//     cb(null, 'public/images/users');
-//   },
-//   filename: (req, file, cb) => {
-//     const ext = file.mimetype.split('/')[1];
-//     cb(null, `user-${req.user.id}-${Date.now()}.${ext}`);
-//   },
-// });
+const cloudinary = require('../utils/cloudinary');
 
 const multerStorage = multer.memoryStorage();
 
@@ -26,17 +17,52 @@ const multerFilter = (req, file, cb) => {
 };
 
 const upload = multer({ storage: multerStorage, fileFilter: multerFilter });
+
 exports.uploadUserPhoto = upload.single('photo');
 
 exports.resizeUserPhoto = catchAsync(async (req, res, next) => {
   if (!req.file) return next();
   req.file.filename = `user-${req.user.id}-${Date.now()}.jpeg`;
-  await sharp(req.file.buffer)
-    .resize(500, 500)
-    .toFormat('jpeg')
-    .jpeg({ quality: 90 })
-    .toFile(`public/images/users/${req.file.filename}`);
-  next();
+
+  if (
+    process.env.CLOUDINARY_API_SECRET &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_CLOUD_NAME
+  ) {
+    const resizedImageBuffer = await sharp(req.file.buffer)
+      .resize(500, 500)
+      .toFormat('jpeg')
+      .jpeg({ quality: 90 })
+      .toBuffer();
+
+    const cloudinaryResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'image',
+          folder: process.env.CLOUDINARY_FOLDER_USERS || 'users',
+          public_id: req.file.originalname.replace(/\.[^/.]+$/, ''),
+          overwrite: true,
+        },
+        (err, result) => {
+          if (err) {
+            return reject(new AppError('Error uploading resized image', 400));
+          }
+          resolve(result);
+        },
+      );
+      uploadStream.end(resizedImageBuffer);
+    });
+    req.file.filename = cloudinaryResult.secure_url;
+
+    next();
+  } else {
+    await sharp(req.file.buffer)
+      .resize(500, 500)
+      .toFormat('jpeg')
+      .jpeg({ quality: 90 })
+      .toFile(`public/images/users/${req.file.filename}`);
+    next();
+  }
 });
 
 // FUNCTION TO FILTER OBJECTS
@@ -70,6 +96,8 @@ exports.updateMe = catchAsync(async (req, res, next) => {
     'phone',
     'shippingAddress',
     'postalCode',
+    'city',
+    'state',
   );
   if (req.file) filteredData.photo = req.file.filename;
   const updatedUser = await User.findByIdAndUpdate(req.user.id, filteredData, {

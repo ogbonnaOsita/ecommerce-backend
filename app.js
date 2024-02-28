@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
 const hpp = require('hpp');
+const cors = require('cors');
 
 const AppError = require('./utils/appError');
 const globalErrorHandler = require('./controllers/errorController');
@@ -22,6 +23,9 @@ const app = express();
 // Set Security HTTP headers
 app.use(helmet());
 
+app.use(cors());
+app.options('*', cors());
+
 // Development logging
 if ((process.env.NODE_ENV || '').trim === 'development') {
   app.use(morgan('dev'));
@@ -29,7 +33,7 @@ if ((process.env.NODE_ENV || '').trim === 'development') {
 
 // Limit request from same API
 const limiter = rateLimit({
-  max: 100,
+  max: 1000000000000,
   windowMs: 60 * 60 * 1000,
   message: 'Too many requests from this IP, please try again in an hour!',
 });

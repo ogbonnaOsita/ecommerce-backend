@@ -48,8 +48,8 @@ exports.signup = catchAsync(async (req, res, next) => {
   //     passwordConfirm: req.body.passwordConfirm,
   //   });
 
-  const url = `${req.protocol}://${req.get('host')}/api/v1/users/me`;
-  await new Email(req.body, url).sendWelcome();
+  // const url = `${req.protocol}://${req.get('host')}/api/v1/users/me`;
+  // await new Email(req.body, url).sendWelcome();
   const newUser = await User.create(req.body);
   // createSendToken(newUser, 201, res);
 
@@ -57,7 +57,10 @@ exports.signup = catchAsync(async (req, res, next) => {
   await newUser.save({ validateBeforeSave: false });
 
   try {
-    const activationURL = `${req.protocol}://${req.get('host')}/api/v1/users/accountActivation/${activationToken}`;
+    const baseURL =
+      req.body.baseURL ||
+      `${req.protocol}://${req.get('host')}/api/v1/users/accountActivation`;
+    const activationURL = `${baseURL}/${activationToken}`;
     await new Email(newUser, activationURL).sendWelcome();
 
     res.status(200).json({
@@ -109,7 +112,10 @@ exports.resendEmailActivation = catchAsync(async (req, res, next) => {
   await user.save({ validateBeforeSave: false });
 
   try {
-    const activationURL = `${req.protocol}://${req.get('host')}/api/v1/users/accountActivation/${activationToken}`;
+    const baseURL =
+      req.body.baseURL ||
+      `${req.protocol}://${req.get('host')}/api/v1/users/accountActivation`;
+    const activationURL = `${baseURL}/${activationToken}`;
     await new Email(user, activationURL).sendWelcome();
 
     res.status(200).json({
@@ -216,7 +222,10 @@ exports.forgotPassword = catchAsync(async (req, res, next) => {
   await user.save({ validateBeforeSave: false });
 
   try {
-    const resetURL = `${req.protocol}://${req.get('host')}/api/v1/users/resetPassword/${resetToken}`;
+    const baseURL =
+      req.body.baseURL ||
+      `${req.protocol}://${req.get('host')}/api/v1/users/resetPassword`;
+    const resetURL = `${baseURL}/${resetToken}`;
     await new Email(user, resetURL).sendPasswordReset();
 
     res.status(200).json({

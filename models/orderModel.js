@@ -43,11 +43,14 @@ const orderSchema = new mongoose.Schema({
     type: String,
     required: [true, 'The shipping address is required for the order', 401],
   },
+  postalCode: Number,
+  city: String,
+  state: String,
   paymentId: {
     type: String,
     required: [true, 'The payment Id is required to complete the order'],
   },
-  phoneNumber: {
+  phone: {
     type: String,
     required: [true, 'User phone number is required'],
     validate: [validator.isMobilePhone, 'Please provide a valid phone number'],
@@ -72,7 +75,7 @@ orderSchema.pre(/^find/, function (next) {
     populate: {
       path: 'product',
       model: 'Product',
-      select: 'title price thumbnail',
+      select: 'title price images',
     },
   });
   next();

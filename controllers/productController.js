@@ -1,9 +1,12 @@
 const multer = require('multer');
 const sharp = require('sharp');
 const Product = require('../models/productModel');
+const Category = require('../models/categoryModel');
 const factory = require('./handlerFactory');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
+const APIFeatures = require('../utils/apiFeatures');
+const cloudinary = require('../utils/cloudinary');
 
 const multerStorage = multer.memoryStorage();
 
@@ -29,21 +32,82 @@ exports.resizeProductImages = catchAsync(async (req, res, next) => {
   await Promise.all(
     req.files.images.map(async (file, i) => {
       const filename = `product-${req.params.id}-${Date.now()}-${i + 1}.jpeg`;
-      await sharp(file.buffer)
-        .resize(500, 500)
-        .toFormat('jpeg')
-        .jpeg({ quality: 90 })
-        .toFile(`public/images/products/${filename}`);
+      if (
+        process.env.CLOUDINARY_API_SECRET &&
+        process.env.CLOUDINARY_API_KEY &&
+        process.env.CLOUDINARY_CLOUD_NAME
+      ) {
+        const resizedImageBuffer = await sharp(file.buffer)
+          .resize(500, 500)
+          .toFormat('jpeg')
+          .jpeg({ quality: 90 })
+          .toBuffer();
 
-      req.body.images.push(filename);
+        const cloudinaryResult = await new Promise((resolve, reject) => {
+          const uploadStream = cloudinary.uploader.upload_stream(
+            {
+              resource_type: 'image',
+              folder: process.env.CLOUDINARY_FOLDER_PRODUCTS || 'products',
+              public_id: file.originalname.replace(/\.[^/.]+$/, ''),
+              overwrite: true,
+            },
+            (err, result) => {
+              if (err) {
+                return reject(
+                  new AppError('Error uploading resized image', 400),
+                );
+              }
+              resolve(result);
+            },
+          );
+          uploadStream.end(resizedImageBuffer);
+        });
+        req.body.images.push(cloudinaryResult.secure_url);
+      } else {
+        await sharp(file.buffer)
+          .resize(500, 500)
+          .toFormat('jpeg')
+          .jpeg({ quality: 90 })
+          .toFile(`public/images/products/${filename}`);
+
+        req.body.images.push(filename);
+      }
     }),
   );
   next();
 });
 
+exports.getProductsByCategory = catchAsync(async (req, res, next) => {
+  const categoryId = await Category.findOne({ slug: req.params.slug }, '_id');
+  const totalCount = await Product.countDocuments({
+    category: categoryId,
+  });
+  // To allow for nested GET reviews on product
+  const features = new APIFeatures(
+    Product.find({
+      category: categoryId,
+    }),
+    req.query,
+  )
+    .filter()
+    .sort()
+    .limitFields()
+    .pagination();
+  const products = await features.query;
+
+  res.status(200).json({
+    status: 'success',
+    totalCount,
+    data: {
+      data: products,
+    },
+  });
+});
+
 exports.getAllProducts = factory.getAll(Product);
 exports.createProduct = factory.createOne(Product);
 exports.getProduct = factory.getOne(Product, { path: 'reviews' });
+exports.getProductBySlug = factory.getOneBySlug(Product, { path: 'reviews' });
 exports.updateProduct = factory.updateOne(Product);
 exports.deleteProduct = factory.deleteOne(Product);
 

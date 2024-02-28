@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema({
   },
 
   phone: {
-    type: Number,
+    type: String,
     validate: [validator.isMobilePhone, 'Please provide a valid phone number'],
   },
 
@@ -31,6 +31,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: 'default.jpeg',
   },
+  
   password: {
     type: String,
     required: [true, 'Please provide a password'],
@@ -55,6 +56,8 @@ const userSchema = new mongoose.Schema({
   },
   passwordChangedAt: Date,
   shippingAddress: String,
+  city: String,
+  state: String,
   postalCode: Number,
   passwordResetToken: String,
   passwordResetExpires: Date,

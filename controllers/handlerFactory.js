@@ -15,12 +15,14 @@ exports.createOne = (Model) =>
 
 exports.getAll = (Model) =>
   catchAsync(async (req, res, next) => {
-    // To allow for nested GET reviews on tour
+    // To allow for nested GET reviews on product
     let filter = {};
     if (req.params.productId)
       filter = {
         product: req.params.productId,
       };
+
+    const totalCount = await Model.countDocuments(filter);
 
     const features = new APIFeatures(Model.find(filter), req.query)
       .filter()
@@ -32,7 +34,7 @@ exports.getAll = (Model) =>
     // 3. SEND RESPONSE
     res.status(200).json({
       status: 'success',
-      count: data.length,
+      totalCount,
       data: {
         data,
       },
@@ -42,6 +44,22 @@ exports.getAll = (Model) =>
 exports.getOne = (Model, popOptions) =>
   catchAsync(async (req, res, next) => {
     let query = Model.findById(req.params.id);
+    if (popOptions) query = query.populate(popOptions);
+    const data = await query;
+    if (!data) {
+      return next(new AppError('No data found', 404));
+    }
+    res.status(200).json({
+      status: 'success',
+      data: {
+        data,
+      },
+    });
+  });
+
+exports.getOneBySlug = (Model, popOptions) =>
+  catchAsync(async (req, res, next) => {
+    let query = Model.findOne({ slug: req.params.slug });
     if (popOptions) query = query.populate(popOptions);
     const data = await query;
     if (!data) {

@@ -18,11 +18,16 @@ exports.acceptPayment = catchAsync(async (req, res, next) => {
     return next(new AppError('Invalid amount', 400));
   }
 
+  const data = {
+    email: user.email,
+    amount: amount * 100,
+  };
+
+  if (req.body.metadata) data.metadata = { data: req.body.metadata };
+  if (req.body.callback_url) data.callback_url = req.body.callback_url;
+
   await paystackConnect
-    .post('/transaction/initialize', {
-      email: user.email,
-      amount: amount * 100,
-    })
+    .post('/transaction/initialize', data)
     .then((resData) => {
       res.status(201).json({
         status: 'success',
@@ -53,8 +58,8 @@ exports.verifyPayment = catchAsync(async (req, res, next) => {
 
       if (!payment) {
         await Payment.create(paymentData);
-      } else if (payment.status !== responseData.data.status) {
-        payment.status = responseData.data.status;
+      } else if (payment.status !== responseData.data.data.status) {
+        payment.status = responseData.data.data.status;
         payment.save();
       }
       res.status(200).json({

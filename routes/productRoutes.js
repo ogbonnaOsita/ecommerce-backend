@@ -5,6 +5,7 @@ const reviewRouter = require('./reviewRoutes');
 
 const router = express.Router();
 
+router.get('/category/:slug', productController.getProductsByCategory);
 router.use('/:productId/reviews', reviewRouter);
 
 router
@@ -32,5 +33,7 @@ router
     authController.restrictTo('admin', 'editor'),
     productController.deleteProduct,
   );
+
+router.get('/:slug/slug', productController.getProductBySlug);
 
 module.exports = router;

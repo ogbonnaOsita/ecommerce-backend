@@ -13,7 +13,7 @@ router.post(
 router.post('/login', authController.login);
 
 // Reset user password links
-router.post('/forgotPassword', authController.forgotPassword);
+router.post('/forgotPassword', authController.forgotPassword);  
 router.patch('/resetPassword/:token', authController.resetPassword);
 
 // Email Verification Liknks

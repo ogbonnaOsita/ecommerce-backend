@@ -107,6 +107,8 @@ productSchema.virtual('reviews', {
   ref: 'Review',
   foreignField: 'product',
   localField: '_id',
+  options: { sort: { createdAt: -1 } },
 });
+
 const Product = mongoose.model('Product', productSchema);
 module.exports = Product;
