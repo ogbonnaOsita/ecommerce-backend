@@ -51,7 +51,6 @@ exports.signup = catchAsync(async (req, res, next) => {
   // const url = `${req.protocol}://${req.get('host')}/api/v1/users/me`;
   // await new Email(req.body, url).sendWelcome();
   const newUser = await User.create(req.body);
-  // createSendToken(newUser, 201, res);
 
   const activationToken = newUser.createEmailActivationToken();
   await newUser.save({ validateBeforeSave: false });
@@ -67,6 +66,8 @@ exports.signup = catchAsync(async (req, res, next) => {
       status: 'success',
       message: 'Account verification link has been sent to your email',
     });
+
+    createSendToken(newUser, 201, res);
   } catch (err) {
     newUser.emailActivationToken = undefined;
     newUser.emailActivationTokenExpires = undefined;
